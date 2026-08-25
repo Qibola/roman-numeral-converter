@@ -26,12 +26,19 @@ Right now that prints a short demo table:
 3999 -> MMMCMXCIX
 ```
 
+...followed by a few numerals read back the other way, including some
+deliberately broken ones.
+
 Or import it:
 
 ```python
->>> from roman import int_to_roman
+>>> from roman import int_to_roman, roman_to_int
 >>> int_to_roman(2026)
 'MMXXVI'
+>>> roman_to_int("MMXXVI")
+2026
+>>> roman_to_int(" mcmxciv ")   # whitespace and lower case are fine
+1994
 ```
 
 ## Roadmap
@@ -39,7 +46,7 @@ Or import it:
 This project is built a small piece at a time. Progress:
 
 - [x] Day 1 — Scaffold: README, `.gitignore`, core `int_to_roman()`
-- [ ] Day 2 — `roman_to_int()` + validation of malformed numerals
+- [x] Day 2 — `roman_to_int()` + validation of malformed numerals
 - [ ] Day 3 — Command-line interface (argparse), auto-detecting direction
 - [ ] Day 4 — Unit tests (`unittest`) covering edge cases and round trips
 - [ ] Day 5 — Interactive mode + README polish
@@ -81,3 +88,39 @@ so callers that already catch `ValueError` keep working.
 `isinstance(number, bool)` is checked first because in Python `bool` is a
 subclass of `int` — without that guard, `int_to_roman(True)` would happily
 return `"I"`.
+
+## How `roman_to_int()` works
+
+Reading a numeral is one left-to-right pass over the seven single letters:
+
+> A letter is **subtracted** if the letter after it is larger, and **added**
+> otherwise.
+
+So `IX` is `-1 + 10 = 9`, while `XI` is `10 + 1 = 11`. That single rule handles
+every well-formed numeral.
+
+The catch is that the rule is too forgiving on its own. It reads `IIII` as 4,
+`IM` as 999 and `VV` as 10 — values that are correct arithmetic but are not how
+those numbers are written. Rather than hand-code the repetition limits and
+which pairs may subtract from which, the function spells the total back out
+with Day 1's `int_to_roman()` and compares:
+
+```python
+canonical = int_to_roman(total)
+if canonical != cleaned:
+    raise RomanError(...)
+```
+
+If the input isn't character-for-character the canonical spelling, it's
+rejected — and because the canonical form is already in hand, the error can say
+what the right spelling would have been:
+
+```
+>>> roman_to_int("IIII")
+RomanError: 'IIII' is not a valid Roman numeral; 4 is written IV.
+```
+
+Validation happens in widening circles: wrong type, then empty string, then
+letters that aren't numerals at all, then out-of-range totals, and only then
+the canonical-spelling check. Each layer can assume the ones before it passed,
+which keeps every individual check short.
