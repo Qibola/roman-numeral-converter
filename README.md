@@ -29,6 +29,19 @@ Right now that prints a short demo table:
 ...followed by a few numerals read back the other way, including some
 deliberately broken ones.
 
+To convert something, use the command line:
+
+```bash
+$ python cli.py 1994 MCMXCIV xiv
+1994 -> MCMXCIV
+MCMXCIV -> 1994
+xiv -> 14
+```
+
+There is no `--to-roman` / `--to-int` flag, because the value itself already
+says which way to go. Pass `-q` to print bare results, and `--help` for the
+full usage.
+
 Or import it:
 
 ```python
@@ -47,7 +60,7 @@ This project is built a small piece at a time. Progress:
 
 - [x] Day 1 — Scaffold: README, `.gitignore`, core `int_to_roman()`
 - [x] Day 2 — `roman_to_int()` + validation of malformed numerals
-- [ ] Day 3 — Command-line interface (argparse), auto-detecting direction
+- [x] Day 3 — Command-line interface (argparse), auto-detecting direction
 - [ ] Day 4 — Unit tests (`unittest`) covering edge cases and round trips
 - [ ] Day 5 — Interactive mode + README polish
 
@@ -56,6 +69,7 @@ This project is built a small piece at a time. Progress:
 | File | What it does |
 | --- | --- |
 | `roman.py` | The conversion code |
+| `cli.py` | Command-line front end |
 
 ## How `int_to_roman()` works
 
@@ -124,3 +138,29 @@ Validation happens in widening circles: wrong type, then empty string, then
 letters that aren't numerals at all, then out-of-range totals, and only then
 the canonical-spelling check. Each layer can assume the ones before it passed,
 which keeps every individual check short.
+
+## How the CLI picks a direction
+
+`cli.py` takes one or more values and asks a single question about each:
+
+```python
+if text.lstrip("+-").isdigit():
+    return int_to_roman(int(text))
+return str(roman_to_int(text))
+```
+
+Digits mean "spell this out", anything else means "read this back". That is
+enough to drop the mode flag entirely — `python cli.py 14 XIV` converts in both
+directions in one command.
+
+The `lstrip("+-")` matters for a small reason. Without it, `-5` fails the
+`isdigit()` test, gets treated as a numeral, and comes back with the confusing
+complaint that `-` is not a Roman letter. With it, `-5` is recognised as a
+number and reaches `int_to_roman()`, which gives the useful message: Roman
+numerals only cover 1 to 3999.
+
+Bad values do not stop the run. Each one prints to `stderr` and the loop
+carries on, so a long list still converts everything it can; the command then
+exits `1` if anything failed. That split — good results on `stdout`, complaints
+on `stderr`, failure in the exit code — is what lets the tool be used in a
+pipeline.
