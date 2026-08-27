@@ -42,6 +42,12 @@ There is no `--to-roman` / `--to-int` flag, because the value itself already
 says which way to go. Pass `-q` to print bare results, and `--help` for the
 full usage.
 
+To check nothing is broken:
+
+```bash
+python -m unittest -v
+```
+
 Or import it:
 
 ```python
@@ -61,7 +67,7 @@ This project is built a small piece at a time. Progress:
 - [x] Day 1 — Scaffold: README, `.gitignore`, core `int_to_roman()`
 - [x] Day 2 — `roman_to_int()` + validation of malformed numerals
 - [x] Day 3 — Command-line interface (argparse), auto-detecting direction
-- [ ] Day 4 — Unit tests (`unittest`) covering edge cases and round trips
+- [x] Day 4 — Unit tests (`unittest`) covering edge cases and round trips
 - [ ] Day 5 — Interactive mode + README polish
 
 ## Files
@@ -70,6 +76,7 @@ This project is built a small piece at a time. Progress:
 | --- | --- |
 | `roman.py` | The conversion code |
 | `cli.py` | Command-line front end |
+| `test_roman.py` | The test suite |
 
 ## How `int_to_roman()` works
 
@@ -164,3 +171,40 @@ carries on, so a long list still converts everything it can; the command then
 exits `1` if anything failed. That split — good results on `stdout`, complaints
 on `stderr`, failure in the exit code — is what lets the tool be used in a
 pipeline.
+
+## What the tests cover
+
+`test_roman.py` is 24 tests in four groups, and the split is deliberate: three
+groups test one function each, and the fourth tests the two together.
+
+`TestIntToRoman` and `TestRomanToInt` cover the edges rather than the middle —
+the boundaries (1 and 3999), just outside them (0, -1, 4000), the six
+subtractive pairs, the wrong types, and the `True` case that `bool`-subclasses-
+`int` would otherwise let through. They also assert on the *content* of two
+error messages, because "`IIII` should have been `IV`" is a feature of this
+converter, not an accident of how it fails.
+
+`TestRoundTrip` is the group worth stealing for other projects. Instead of
+listing examples, it makes one claim about the whole domain:
+
+```python
+for number in range(MIN_VALUE, MAX_VALUE + 1):
+    self.assertEqual(roman_to_int(int_to_roman(number)), number)
+```
+
+All 3999 values, in a few milliseconds. This is only possible because the two
+functions are inverses, and when a pair of functions has that shape the round
+trip finds bugs that hand-picked cases miss — a spelling that reads back as the
+wrong number has nowhere to hide. The second test in the group makes the
+stronger claim that no output of `int_to_roman()` is ever rejected by
+`roman_to_int()`'s canonical-form check, which is what keeps the two halves
+from drifting apart.
+
+`unittest.subTest()` does the small but real job of reporting every failing
+case in a loop instead of stopping at the first, so a broken table shows all
+six bad pairs in one run rather than one per fix.
+
+Sanity-checking the suite itself: changing the `(4, "IV")` row of `VALUES` to
+`(4, "IIII")` fails 11 of the 24 tests. A test suite that passes no matter what
+the code does is worse than none, so it is worth breaking the code on purpose
+once to watch the tests notice.
