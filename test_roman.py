@@ -2,15 +2,17 @@
 
 Day 4: the safety net. Every claim the README makes about this code should be
 checked here, so a future change that breaks one of them fails loudly.
+Day 5: the interactive loop, driven by StringIO instead of a real keyboard.
 
 Run them with:
 
     python -m unittest -v
 """
 
+import io
 import unittest
 
-from cli import convert
+from cli import convert, interactive
 from roman import MAX_VALUE, MIN_VALUE, RomanError, int_to_roman, roman_to_int
 
 
@@ -171,6 +173,55 @@ class TestConvert(unittest.TestCase):
     def test_empty_value(self):
         with self.assertRaises(RomanError):
             convert("   ")
+
+
+class TestInteractive(unittest.TestCase):
+    """The prompt loop. Feeding it a StringIO is the same as typing."""
+
+    def run_session(self, typed):
+        """Run the loop over `typed` and return everything it printed."""
+        out = io.StringIO()
+        code = interactive(io.StringIO(typed), out)
+        return code, out.getvalue()
+
+    def test_converts_both_directions(self):
+        code, output = self.run_session("1994\nXIV\n")
+        self.assertEqual(code, 0)
+        self.assertIn("MCMXCIV", output)
+        self.assertIn("14", output)
+
+    def test_bad_input_does_not_end_the_session(self):
+        # The one-shot command exits 1 on a bad value; the prompt must not,
+        # or a single typo would throw the user out.
+        code, output = self.run_session("IIII\n42\n")
+        self.assertEqual(code, 0)
+        self.assertIn("error:", output)
+        self.assertIn("XLII", output)
+
+    def test_blank_line_is_ignored(self):
+        code, output = self.run_session("\n   \n7\n")
+        self.assertEqual(code, 0)
+        self.assertNotIn("error:", output)
+        self.assertIn("VII", output)
+
+    def test_quit_words_stop_before_later_lines(self):
+        for word in ["quit", "exit", "q", "QUIT"]:
+            with self.subTest(word=word):
+                code, output = self.run_session(word + "\n9\n")
+                self.assertEqual(code, 0)
+                self.assertNotIn("IX", output)
+
+    def test_help_prints_help_and_continues(self):
+        code, output = self.run_session("help\n40\n")
+        self.assertEqual(code, 0)
+        self.assertIn("Commands", output)
+        self.assertIn("XL", output)
+
+    def test_end_of_input_exits_cleanly(self):
+        # An exhausted StringIO is what Ctrl-D looks like to readline().
+        code, output = self.run_session("")
+        self.assertEqual(code, 0)
+        self.assertIn("roman>", output)
 
 
 if __name__ == "__main__":

@@ -42,6 +42,21 @@ There is no `--to-roman` / `--to-int` flag, because the value itself already
 says which way to go. Pass `-q` to print bare results, and `--help` for the
 full usage.
 
+Run it with no values at all and it asks instead:
+
+```
+$ python cli.py
+Roman numeral converter. Type a number (1-3999) or a numeral.
+Type 'help' for help, or 'quit' (or Ctrl-D) to leave.
+roman> 2026
+MMXXVI
+roman> MMXXVI
+2026
+roman> IIII
+error: 'IIII' is not a valid Roman numeral; 4 is written IV.
+roman> quit
+```
+
 To check nothing is broken:
 
 ```bash
@@ -68,14 +83,16 @@ This project is built a small piece at a time. Progress:
 - [x] Day 2 — `roman_to_int()` + validation of malformed numerals
 - [x] Day 3 — Command-line interface (argparse), auto-detecting direction
 - [x] Day 4 — Unit tests (`unittest`) covering edge cases and round trips
-- [ ] Day 5 — Interactive mode + README polish
+- [x] Day 5 — Interactive mode + README polish
+
+All five steps are done, so the project is finished.
 
 ## Files
 
 | File | What it does |
 | --- | --- |
 | `roman.py` | The conversion code |
-| `cli.py` | Command-line front end |
+| `cli.py` | Command-line front end and interactive prompt |
 | `test_roman.py` | The test suite |
 
 ## How `int_to_roman()` works
@@ -208,3 +225,54 @@ Sanity-checking the suite itself: changing the `(4, "IV")` row of `VALUES` to
 `(4, "IIII")` fails 11 of the 24 tests. A test suite that passes no matter what
 the code does is worse than none, so it is worth breaking the code on purpose
 once to watch the tests notice.
+
+## How interactive mode works
+
+The prompt is a `while True` loop around the same `convert()` the one-shot
+command uses, so the two front ends can never disagree about what `XIV` means.
+Only three things are different, and each one is a deliberate choice about what
+a person at a keyboard needs.
+
+**A typo must not end the session.** The one-shot command sets a failure flag
+and exits `1`, which is right for a script. At a prompt that would throw the
+user out over a mistyped letter, so `interactive()` prints the error and loops.
+The mistake is the normal case here, not the exceptional one — which is also
+why the error text goes to `stdout` with the results rather than to `stderr`,
+where it could arrive out of order on the screen.
+
+**Leaving has to be obvious.** `quit`, `exit`, `q` and Ctrl-D all work. Ctrl-D
+is the interesting one: it isn't a keypress the loop can check for, it's simply
+end of input, and `readline()` signals that by returning an empty string. A
+blank line the user typed comes back as `"\n"`, which is truthy — so `if not
+line` distinguishes "pressed Enter" from "no more input" with no special cases.
+
+**The streams are arguments, not globals:**
+
+```python
+def interactive(in_stream=None, out_stream=None):
+    in_stream = sys.stdin if in_stream is None else in_stream
+```
+
+This is the part worth carrying into other projects. `input()` would have been
+shorter, but it reads the real keyboard, and code that reads the real keyboard
+cannot be tested. Taking the streams as parameters means `TestInteractive` can
+hand the loop a `StringIO` of typed lines and read back everything it printed:
+
+```python
+code = interactive(io.StringIO("IIII\n42\n"), out)
+```
+
+That single change is what makes six of the thirty tests possible — including
+the one asserting that a bad line does *not* end the session, which is exactly
+the behaviour most likely to get broken by a later refactor and impossible to
+notice by hand. Defaulting the arguments to `None` rather than to `sys.stdin`
+directly keeps that testability without capturing the stream at import time.
+
+## Where this landed
+
+Five days, four files, no dependencies, 30 tests. The shape that made it work
+was doing the integer -> numeral direction first, because everything after it
+leaned on that one table: `roman_to_int()` validates by re-spelling with it,
+the CLI just picks which direction to call, the round-trip test checks all 3999
+values through both, and the prompt is a loop around the CLI's converter. Each
+step got smaller because the previous one had already done the thinking.
